@@ -5,24 +5,76 @@ import cv2 as cv
 
 
 def calculate_svd(A: np.ndarray):
-    print(A)
-    A_t = A.T
+    m, n = A.shape
+    eigenvalue_v, V = np.linalg.eig(A.T @ A)
+    sorted_id = sorted(range(len(eigenvalue_v)), key=lambda k: eigenvalue_v[k], reverse=True)
+    eigenvalue_v = np.sqrt(eigenvalue_v)
+    V[:] = V[:, sorted_id]
 
-    eigenvalue, U = np.linalg.eig(np.matmul(A, A_t))
+    eigenvalue_u, U = np.linalg.eig(A @ A.T)
+    sorted_id = sorted(range(len(eigenvalue_u)), key=lambda k: eigenvalue_u[k], reverse=True)
+    eigenvalue_u = np.sqrt(eigenvalue_u)
 
-    eigenvalue, V = np.linalg.eig(np.matmul(A_t, A))
+    U[:] = U[:, sorted_id]
+    if m > n:
+        return U, eigenvalue_v.reshape((-1, 1)), V.T
+    else:
+        return U, eigenvalue_u.reshape((-1, 1)), V.T
 
-    eigenvalue = abs(eigenvalue) ** 0.5
-    print("U", U)
+    # if m > n:
+    #     sigma, V = np.linalg.eig(A.T @ A)
+    #     # 将sigma 和V 按照特征值从大到小排列
+    #     arg_sort = np.argsort(sigma)[::-1]
+    #     sigma = np.sort(sigma)[::-1]
+    #     V = V[:, arg_sort]
+    #
+    #     # 对sigma进行平方根处理
+    #     sigma_matrix = np.diag(np.sqrt(sigma))
+    #
+    #     sigma_inv = np.linalg.inv(sigma_matrix)
+    #
+    #     U = A @ V.T @ sigma_inv
+    #     U = np.pad(U, pad_width=((0, 0), (0, m - n)))
+    #     sigma_matrix = np.pad(sigma_matrix, pad_width=((0, m - n), (0, 0)))
+    #     return (U, sigma_matrix, V)
+    # else:
+    #     # 同m>n 只不过换成从U开始计算
+    #     sigma, U = np.linalg.eig(A @ A.T)
+    #     arg_sort = np.argsort(sigma)[::-1]
+    #     sigma = np.sort(sigma)[::-1]
+    #     U = U[:, arg_sort]
+    #
+    #     sigma_matrix = np.diag(np.sqrt(sigma))
+    #     sigma_inv = np.linalg.inv(sigma_matrix)
+    #     V = sigma_inv @ U.T @ A
+    #     V = np.pad(V, pad_width=((0, n - m), (0, 0)))
+    #
+    #     sigma_matrix = np.pad(sigma_matrix, pad_width=((0, 0), (0, n - m)))
+    #     return (U, sigma_matrix, V)
 
-    print("V", V)
-    print("eigenvalue", eigenvalue)
+
+    # A_t = A.T
+    #
+    # eigenvalue, U = np.linalg.eig(np.matmul(A, A_t))
+    # sorted_id = sorted(range(len(eigenvalue)), key=lambda k: eigenvalue[k], reverse=True)
+    # # 将range()序列, 根据eigenvalue的值, 进行排序, 得到的就是index
+    # U[:] = U[:, sorted_id]
+    # # print("fix", U)
+    # eigenvalue, V = np.linalg.eig(np.matmul(A_t, A))
+    # sorted_id = sorted(range(len(eigenvalue)), key=lambda k: eigenvalue[k], reverse=True)
+    # V[:] = V[:, sorted_id]
+    # # print("fix", V)
+    # eigenvalue = abs(eigenvalue) ** 0.5
+    #
+    # singular_value = sorted(eigenvalue, reverse=True)
+    # print(singular_value)
+    #
+    # return U, np.array(singular_value), eigenvalue
 
 
 
 
-
-def get_signal_matrix(signal_value: np.ndarray, k: int) -> np.ndarray:
+def get_sigma_matrix(signal_value: np.ndarray, k: int) -> np.ndarray:
     assert k <= signal_value.shape[0]
     # print(signal_value.shape) # (len, )
     # n = signal_value.shape[0]
@@ -50,9 +102,9 @@ def test() -> None:
     print(V)
     print("===="*100)
 
-    # calculate_svd(A)
-
-    print(get_signal_matrix(signal_value, len(signal_value)))
+    calculate_svd(A)
+    #
+    # print(get_signal_matrix(signal_value, len(signal_value)))
     # 将奇异值处理成矩阵, 测试速度。 :
     # start_time = time.time()
     # for i in range(1000):
@@ -71,7 +123,7 @@ def test() -> None:
 
 def main() -> None:
 
-    plt.figure(0, figsize=(16, 9), dpi=600)
+    # plt.figure(0, figsize=(16, 9), dpi=300)
     K = 256
 
 
@@ -84,19 +136,41 @@ def main() -> None:
     # plt.subplot(2, 4, 1)
     # plt.imshow(img[:, :, ::-1]) # plt读取是RGB
     # plt.title("source img")
+    size_list = list()
+    size_list.append(0)
+    K_list = list(range(0, K+1, 1))
+    zip_rate_list = list((120, ))
+    # print(zip_rate_list)
 
-    for idx, k in enumerate(range(1, 9, 1)):
-        k = k * 4
+    for idx, k in enumerate(range(1, K+1, 1)):
+        # k = k * 4
         svd_zip_img = np.zeros_like(img, dtype=np.float32)
-
+        size_img = 0
         for channel in range(c):
-            # calculate_svd(img[:, :, 0])
+            # U, singular_value, V_T = calculate_svd(img[:, :, channel])
+            # print(singular_value)
             U, singular_value, V_T = np.linalg.svd(img[:, :, channel])
-            sigma_matrix = get_signal_matrix(singular_value, k)
+            # print(singular_value)
+            sigma_matrix = get_sigma_matrix(singular_value, k)
             svd_zip_img[:, :, channel] = U[:, :k] @ sigma_matrix @ V_T[:k, :]
 
-            # break
+            size = U.shape[0] * k + sigma_matrix.shape[0] * sigma_matrix.shape[1] + k * V_T.shape[1]
+            size_img += size
 
+        size_list.append(size_img)
+        zip_rate_list.append(img.size / size_img)
+
+    plt.plot(K_list, size_list)
+    plt.title("Image size in different singular value")
+    plt.show()
+
+
+    plt.plot(K_list, zip_rate_list)
+    plt.title("Image compress rate in different singular value")
+
+    plt.show()
+
+"""
         # 归一化, 平均色调。
         for i in range(c):
             MAX = np.max(svd_zip_img[:, :, i])
@@ -110,8 +184,9 @@ def main() -> None:
         # print(222 + idx)
         plt.imshow(zip_img[:, :, ::-1])
 
-    plt.savefig("./svd_subtle_contrast_image.png")
+    # plt.savefig("./svd_subtle_contrast_image.png")
     plt.show()
+"""
         # cv.imshow("img", np.hstack([img, zip_img]))
         #
         # cv.imshow("B", svd_zip_img)
